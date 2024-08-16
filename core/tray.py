@@ -6,7 +6,8 @@ from PIL import Image
 import json
 
 APP_NAME = "Baafucha"
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'{APP_NAME.lower()}_config.json')
+CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.baafucha')
+CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
 
 def get_startup_key():
     return winreg.OpenKey(
@@ -25,12 +26,19 @@ def is_startup_enabled():
         return False
 
 def load_config():
+    if not os.path.exists(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR)
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r') as f:
-            return json.load(f)
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Error reading config file. Using default settings.")
     return {"load_on_startup": True}  # Default to True if no config file exists
 
 def save_config(config):
+    if not os.path.exists(CONFIG_DIR):
+        os.makedirs(CONFIG_DIR)
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f)
 
@@ -67,7 +75,7 @@ def on_quit(icon, stop_listener_func):
 class SystemTrayApp:
     def __init__(self, stop_listener_func):
         self.icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.png')
-
+        
         self.menu = pystray.Menu(
             pystray.MenuItem('Load on startup', toggle_startup, checked=lambda _: is_startup_enabled()),
             pystray.MenuItem('Quit', lambda: on_quit(self.icon, stop_listener_func))
