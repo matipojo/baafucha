@@ -6,3 +6,7 @@ build/
 dist/
 
 Baafucah.spec
+
+*.pyc
+
+baafucha_config.json

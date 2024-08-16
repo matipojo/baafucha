@@ -2,10 +2,10 @@ import keyboard
 import pyperclip
 from pynput import keyboard as pynput_keyboard
 import time
-import pystray
 from PIL import Image
 import threading
 import os
+from core.tray import SystemTrayApp
 
 # Keyboard mapping for English to Hebrew and vice versa
 en_to_he = {
@@ -72,29 +72,12 @@ def on_key_press(key):
     except AttributeError:
         pass
 
-def on_quit():
-    """Handle quit event from system tray menu."""
-    icon.stop()
-    listener.stop()
-
 # Create keyboard listener
 listener = pynput_keyboard.Listener(on_press=on_key_press)
 
-# Create system tray menu
-menu = pystray.Menu(
-    pystray.MenuItem('Quit', on_quit)
-)
-
-# Get the path to the icon file
-icon_path = os.path.join(os.path.dirname(__file__), 'assets', 'icon.png')
-
-# Create system tray icon
-icon = pystray.Icon(
-    "Baafucha",
-    Image.open(icon_path),
-    "Baafucha - Keyboard Layout Converter",
-    menu
-)
+def stop_listener():
+    """Stop the keyboard listener."""
+    listener.stop()
 
 if __name__ == "__main__":
     # Start keyboard listener in a separate thread
@@ -106,4 +89,5 @@ if __name__ == "__main__":
     print("Press Ctrl+F8 to select all text and convert it.")
     
     # Run system tray icon
-    icon.run()
+    tray = SystemTrayApp(stop_listener)
+    tray.run()
