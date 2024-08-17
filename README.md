@@ -33,9 +33,12 @@ Ba'afucha is a tiny program that provides an easy way to convert text between En
 ## Requirements
 
 - Windows operating system
-- Python 3.6+
 
 ## Installation
+
+Download the latest release from the [Releases](https://github.com/matipojo/baafucha/releases) section of the repository.
+
+## Development
 
 1. Clone this repository or download the latest release from the [Releases](https://github.com/matipojo/baafucha/releases) page.
 

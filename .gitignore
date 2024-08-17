@@ -1,12 +1,6 @@
-
 .idea/
-
 build/
-
 dist/
-
-Baafucah.spec
-
+*.spec
 *.pyc
-
 baafucha_config.json
