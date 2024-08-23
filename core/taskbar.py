@@ -11,9 +11,12 @@ import ctypes
 import multiprocessing
 import time
 import winreg
+import threading
+from core.tray import load_config
 
 # Loading the library user32.dll
 user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
 
 # Gets the handle of the taskbar
 taskbar_handle = user32.FindWindowW("Shell_TrayWnd", None)
@@ -21,30 +24,29 @@ taskbar_handle = user32.FindWindowW("Shell_TrayWnd", None)
 # Setting constants
 WM_SETTINGCHANGE = 0x001A
 
-def toggle_color_prevalence():
+import winreg
+
+REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+VALUE_NAME = "ColorPrevalence"
+
+def get_set_color_prevalence(set_value=None):
     """
-    Changes the ColorPrevalence value in the system registry to turn the color on the taskbar on or off.
+    Gets or sets the ColorPrevalence value in the registry.
+    If set_value is None, it returns the current value.
+    If set_value is provided, it sets the new value and returns it.
     """
-    registry_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-    value_name = "ColorPrevalence"
 
     try:
-        # Opens the registry key
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, registry_path, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
-            # reads the current value
-            current_value = winreg.QueryValueEx(key, value_name)[0]
-
-            # Changes the current value to the opposite value
-            new_value = 0 if current_value == 1 else 1
-
-            # Sets the new value
-            winreg.SetValueEx(key, value_name, 0, winreg.REG_DWORD, new_value)
-
-            print(f"Changed ColorPrevalence from {current_value} to {new_value}")
-    except FileNotFoundError:
-        print("Registry path or value not found.")
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+            if set_value is None:
+                value, _ = winreg.QueryValueEx(key, VALUE_NAME)
+                return value
+            else:
+                winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_DWORD, set_value)
+                return set_value
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred with ColorPrevalence: {e}")
+        return None
 
 def refresh_taskbar():
     """
@@ -52,51 +54,82 @@ def refresh_taskbar():
     """
     user32.SendMessageW(taskbar_handle, WM_SETTINGCHANGE, 0, "ImmersiveColorSet")
 
+def set_color_prevalence(value):
+    """
+    Sets the ColorPrevalence value in the registry and refreshes the taskbar.
+    """
+    get_set_color_prevalence(value)
+    refresh_taskbar()
+
 def get_current_input_language():
-    """
-    Gets the current keyboard layout code.
-    """
-    layout_id = ctypes.windll.user32.GetKeyboardLayout(0)
-    return layout_id
+    # Get the foreground window
+    hwnd = user32.GetForegroundWindow()
 
-def worker(queue):
-    """
-    A separate process that gets the current keyboard layout code and sends it to a queue.
-    """
-    layout_id = get_current_input_language()
-    queue.put(layout_id)  # Sends the result back to the main process
+    # Get the thread of the foreground window
+    thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
 
-def get_keyboard_layout_process():
-    """
-    Runs a separate process to get the current keyboard layout code and returns the result.
-    """
-    # Creates a queue for communication between processes
-    queue = multiprocessing.Queue()
+    # Get the keyboard layout of the thread
+    layout_id = user32.GetKeyboardLayout(thread_id)
 
-    # Activates a new process to receive the language
-    process = multiprocessing.Process(target=worker, args=(queue,))
-    process.start()
+    # Extract the language ID from the keyboard layout
+    language_id = layout_id & 0xFFFF
 
-    # Waiting for the end of the process and receiving the result
-    process.join()
+    return language_id
 
-    return queue.get()
+language_monitor_thread = None
+language_monitor_stop_event = None
+
+def start_language_monitor():
+    config = load_config()
+
+    if config.get("taskbar_color", False):
+        global language_monitor_thread
+        global language_monitor_stop_event
+
+        language_monitor_stop_event = threading.Event()
+        language_monitor_thread = threading.Thread(target=monitor_language, args=(language_monitor_stop_event,))
+        language_monitor_thread.start()
+
+def stop_language_monitor():
+    global language_monitor_thread
+    if language_monitor_thread:
+        global language_monitor_stop_event
+
+        set_color_prevalence(0)
+
+        language_monitor_stop_event.set()
+        language_monitor_thread.join()
+        language_monitor_thread = None
+        language_monitor_stop_event.clear()
+
+def on_config_change(new_config):
+    stop_language_monitor()
+    if new_config.get("taskbar_color", False):
+        if not language_monitor_thread:
+            start_language_monitor()
 
 # The main process of the program
-def main():
+def monitor_language(stop_event):
     # Stores the last language ID
-    last_layout_id = get_keyboard_layout_process()
+    last_layout_id = get_current_input_language()
+
+    # Set the initial color value
+    new_value = 0 if last_layout_id == kernel32.GetUserDefaultUILanguage() else 1
+    set_color_prevalence( new_value )
 
     # Main loop to check language changes
-    while True:
-        layout_id = get_keyboard_layout_process()
+    while not stop_event.is_set():
+        layout_id = get_current_input_language()
 
         # If a language change is detected, changes the color value and refreshes the taskbar
         if layout_id != last_layout_id:
             last_layout_id = layout_id
-            toggle_color_prevalence()
-            refresh_taskbar()
-            print("Language change detected")
+
+            if layout_id == kernel32.GetUserDefaultUILanguage():
+                set_color_prevalence(0)
+            else:
+                set_color_prevalence(1)
+            print("Language change detected to language ID:", layout_id)
 
         # Waits 0.2 seconds before next test
         time.sleep(0.2)

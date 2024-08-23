@@ -6,6 +6,9 @@ from PIL import Image
 import threading
 import os
 from core.tray import SystemTrayApp
+from core.taskbar import start_language_monitor
+from core.taskbar import stop_language_monitor
+from core.taskbar import on_config_change
 
 # Keyboard mapping for English to Hebrew and vice versa
 en_to_he = {
@@ -78,6 +81,7 @@ listener = pynput_keyboard.Listener(on_press=on_key_press)
 def stop_listener():
     """Stop the keyboard listener."""
     listener.stop()
+    stop_language_monitor()
 
 if __name__ == "__main__":
     # Start keyboard listener in a separate thread
@@ -87,7 +91,9 @@ if __name__ == "__main__":
     print("Baafucha is running.")
     print("Press F8 to convert selected text between English and Hebrew.")
     print("Press Ctrl+F8 to select all text and convert it.")
+
+    start_language_monitor()
     
     # Run system tray icon
-    tray = SystemTrayApp(stop_listener)
+    tray = SystemTrayApp(stop_listener, config_callback=on_config_change)
     tray.run()

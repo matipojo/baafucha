@@ -36,6 +36,17 @@ def load_config():
             print(f"Error reading config file. Using default settings.")
     return {"load_on_startup": True}  # Default to True if no config file exists
 
+def toggle_taskbar_color_config(icon, item):
+    config = load_config()
+    config["taskbar_color"] = not config.get("taskbar_color", False)
+    save_config(config)
+    icon.update_menu()
+    icon.config_callback(config)
+
+def is_taskbar_color_enabled():
+   config = load_config()
+   return config.get("taskbar_color", False)
+
 def save_config(config):
     if not os.path.exists(CONFIG_DIR):
         os.makedirs(CONFIG_DIR)
@@ -73,10 +84,11 @@ def on_quit(icon, stop_listener_func):
     icon.stop()
 
 class SystemTrayApp:
-    def __init__(self, stop_listener_func):
+    def __init__(self, stop_listener_func, config_callback):
         self.icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.png')
         
         self.menu = pystray.Menu(
+            pystray.MenuItem('Change taskbar color', toggle_taskbar_color_config, checked=lambda _: is_taskbar_color_enabled()),
             pystray.MenuItem('Load on startup', toggle_startup, checked=lambda _: is_startup_enabled()),
             pystray.MenuItem('Quit', lambda: on_quit(self.icon, stop_listener_func))
         )
@@ -87,6 +99,8 @@ class SystemTrayApp:
             f"{APP_NAME} - Keyboard Layout Converter",
             self.menu
         )
+
+        self.icon.config_callback = config_callback
 
         # Load config and set startup according to saved preference
         config = load_config()
