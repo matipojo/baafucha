@@ -7,133 +7,127 @@ is detected, and refreshes the taskbar to apply the change and thus causes the c
 the language changes.
 """
 
-import ctypes
-import multiprocessing
-import time
-import winreg
-import threading
+import platform
 from core.tray import load_config
 
-# Loading the library user32.dll
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+class Taskbar:
+    def start_language_monitor(self):
+        raise NotImplementedError
 
-# Gets the handle of the taskbar
-taskbar_handle = user32.FindWindowW("Shell_TrayWnd", None)
+    def stop_language_monitor(self):
+        raise NotImplementedError
 
-# Setting constants
-WM_SETTINGCHANGE = 0x001A
+    def on_config_change(self, new_config):
+        raise NotImplementedError
 
-import winreg
+if platform.system() == "Windows":
+    import ctypes
+    import threading
+    import time
+    import winreg
 
-REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-VALUE_NAME = "ColorPrevalence"
+    class WindowsTaskbar(Taskbar):
+        def __init__(self):
+            self.user32 = ctypes.windll.user32
+            self.kernel32 = ctypes.windll.kernel32
+            self.taskbar_handle = self.user32.FindWindowW("Shell_TrayWnd", None)
+            self.WM_SETTINGCHANGE = 0x001A
+            self.REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+            self.VALUE_NAME = "ColorPrevalence"
+            self.language_monitor_thread = None
+            self.language_monitor_stop_event = None
 
-def get_set_color_prevalence(set_value=None):
-    """
-    Gets or sets the ColorPrevalence value in the registry.
-    If set_value is None, it returns the current value.
-    If set_value is provided, it sets the new value and returns it.
-    """
+        def get_set_color_prevalence(self, set_value=None):
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.REGISTRY_PATH, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+                    if set_value is None:
+                        value, _ = winreg.QueryValueEx(key, self.VALUE_NAME)
+                        return value
+                    else:
+                        winreg.SetValueEx(key, self.VALUE_NAME, 0, winreg.REG_DWORD, set_value)
+                        return set_value
+            except Exception as e:
+                print(f"An error occurred with ColorPrevalence: {e}")
+                return None
 
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
-            if set_value is None:
-                value, _ = winreg.QueryValueEx(key, VALUE_NAME)
-                return value
-            else:
-                winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_DWORD, set_value)
-                return set_value
-    except Exception as e:
-        print(f"An error occurred with ColorPrevalence: {e}")
-        return None
+        def refresh_taskbar(self):
+            self.user32.SendMessageW(self.taskbar_handle, self.WM_SETTINGCHANGE, 0, "ImmersiveColorSet")
 
-def refresh_taskbar():
-    """
-    Refreshes the taskbar by sending a settings change notification to the taskbar.
-    """
-    user32.SendMessageW(taskbar_handle, WM_SETTINGCHANGE, 0, "ImmersiveColorSet")
+        def set_color_prevalence(self, value):
+            self.get_set_color_prevalence(value)
+            self.refresh_taskbar()
 
-def set_color_prevalence(value):
-    """
-    Sets the ColorPrevalence value in the registry and refreshes the taskbar.
-    """
-    get_set_color_prevalence(value)
-    refresh_taskbar()
+        def get_current_input_language(self):
+            hwnd = self.user32.GetForegroundWindow()
+            thread_id = self.user32.GetWindowThreadProcessId(hwnd, 0)
+            layout_id = self.user32.GetKeyboardLayout(thread_id)
+            language_id = layout_id & 0xFFFF
+            return language_id
 
-def get_current_input_language():
-    # Get the foreground window
-    hwnd = user32.GetForegroundWindow()
+        def start_language_monitor(self):
+            config = load_config()
+            if config.get("taskbar_color", False):
+                self.language_monitor_stop_event = threading.Event()
+                self.language_monitor_thread = threading.Thread(target=self.monitor_language, args=(self.language_monitor_stop_event,))
+                self.language_monitor_thread.start()
 
-    # Get the thread of the foreground window
-    thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
+        def stop_language_monitor(self):
+            if self.language_monitor_thread:
+                self.set_color_prevalence(0)
+                self.language_monitor_stop_event.set()
+                self.language_monitor_thread.join()
+                self.language_monitor_thread = None
+                self.language_monitor_stop_event.clear()
 
-    # Get the keyboard layout of the thread
-    layout_id = user32.GetKeyboardLayout(thread_id)
+        def on_config_change(self, new_config):
+            self.stop_language_monitor()
+            if new_config.get("taskbar_color", False):
+                if not self.language_monitor_thread:
+                    self.start_language_monitor()
 
-    # Extract the language ID from the keyboard layout
-    language_id = layout_id & 0xFFFF
+        def monitor_language(self, stop_event):
+            last_layout_id = self.get_current_input_language()
+            new_value = 0 if last_layout_id == self.kernel32.GetUserDefaultUILanguage() else 1
+            self.set_color_prevalence(new_value)
+            while not stop_event.is_set():
+                layout_id = self.get_current_input_language()
+                if layout_id != last_layout_id:
+                    last_layout_id = layout_id
+                    if layout_id == self.kernel32.GetUserDefaultUILanguage():
+                        self.set_color_prevalence(0)
+                    else:
+                        self.set_color_prevalence(1)
+                    print("Language change detected to language ID:", layout_id)
+                time.sleep(0.2)
 
-    return language_id
+elif platform.system() == "Darwin":
+    import subprocess
 
-language_monitor_thread = None
-language_monitor_stop_event = None
+    class MacTaskbar(Taskbar):
+        def start_language_monitor(self):
+            pass  # Implement Mac-specific logic if needed
+
+        def stop_language_monitor(self):
+            pass  # Implement Mac-specific logic if needed
+
+        def on_config_change(self, new_config):
+            pass  # Implement Mac-specific logic if needed
+
+def get_taskbar():
+    if platform.system() == "Windows":
+        return WindowsTaskbar()
+    elif platform.system() == "Darwin":
+        return MacTaskbar()
+    else:
+        raise NotImplementedError("Unsupported platform")
+
+taskbar = get_taskbar()
 
 def start_language_monitor():
-    config = load_config()
-
-    if config.get("taskbar_color", False):
-        global language_monitor_thread
-        global language_monitor_stop_event
-
-        language_monitor_stop_event = threading.Event()
-        language_monitor_thread = threading.Thread(target=monitor_language, args=(language_monitor_stop_event,))
-        language_monitor_thread.start()
+    taskbar.start_language_monitor()
 
 def stop_language_monitor():
-    global language_monitor_thread
-    if language_monitor_thread:
-        global language_monitor_stop_event
-
-        set_color_prevalence(0)
-
-        language_monitor_stop_event.set()
-        language_monitor_thread.join()
-        language_monitor_thread = None
-        language_monitor_stop_event.clear()
+    taskbar.stop_language_monitor()
 
 def on_config_change(new_config):
-    stop_language_monitor()
-    if new_config.get("taskbar_color", False):
-        if not language_monitor_thread:
-            start_language_monitor()
-
-# The main process of the program
-def monitor_language(stop_event):
-    # Stores the last language ID
-    last_layout_id = get_current_input_language()
-
-    # Set the initial color value
-    new_value = 0 if last_layout_id == kernel32.GetUserDefaultUILanguage() else 1
-    set_color_prevalence( new_value )
-
-    # Main loop to check language changes
-    while not stop_event.is_set():
-        layout_id = get_current_input_language()
-
-        # If a language change is detected, changes the color value and refreshes the taskbar
-        if layout_id != last_layout_id:
-            last_layout_id = layout_id
-
-            if layout_id == kernel32.GetUserDefaultUILanguage():
-                set_color_prevalence(0)
-            else:
-                set_color_prevalence(1)
-            print("Language change detected to language ID:", layout_id)
-
-        # Waits 0.2 seconds before next test
-        time.sleep(0.2)
-
-# Running the main program
-if __name__ == "__main__":
-    main()
+    taskbar.on_config_change(new_config)

@@ -3,3 +3,4 @@ pyperclip==1.8.2
 pynput==1.7.6
 pystray==0.19.4
 Pillow==9.5.0
+pyobjc==8.1
