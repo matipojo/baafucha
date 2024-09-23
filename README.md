@@ -32,7 +32,7 @@ Ba'afucha is a tiny program that provides an easy way to convert text between En
 
 ## Requirements
 
-- Windows operating system
+- Windows or MacOS operating system
 
 ## Installation
 
@@ -50,7 +50,7 @@ Download the latest release from the [Releases](https://github.com/matipojo/baaf
 
 ## Usage
 
-1. If you downloaded the release version, simply run the `Baafucha.exe` file.
+1. If you downloaded the release version, simply run the `Baafucha.exe` file on Windows or the `Baafucha` file on MacOS.
 
 2. If you're running from source, run the script:
 
@@ -70,7 +70,7 @@ Download the latest release from the [Releases](https://github.com/matipojo/baaf
 
 ## Building from Source
 
-To create a standalone executable for Windows:
+To create a standalone executable for Windows or MacOS:
 
 1. Ensure you have PyInstaller installed:
 
@@ -84,7 +84,7 @@ To create a standalone executable for Windows:
    pyinstaller --onefile --noconsole --name Baafucha baafucha.py
    ```
 
-3. Find the `Baafucha.exe` in the `dist` folder.
+3. Find the `Baafucha.exe` in the `dist` folder for Windows or the `Baafucha` file for MacOS.
 
 ## Continuous Integration
 
