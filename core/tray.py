@@ -75,8 +75,26 @@ def enable_startup():
         except WindowsError as e:
             print(f"Error enabling startup: {e}")
     elif platform.system() == "Darwin":
-        defaults = NSUserDefaults.standardUserDefaults()
-        defaults.setBool_forKey_(True, get_startup_key())
+        plist = f"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>{get_startup_key()}</string>
+            <key>ProgramArguments</key>
+            <array>
+                <string>{sys.executable}</string>
+            </array>
+            <key>RunAtLoad</key>
+            <true/>
+        </dict>
+        </plist>
+        """
+        launchd_path = os.path.expanduser(f"~/Library/LaunchAgents/{get_startup_key()}.plist")
+        with open(launchd_path, 'w') as f:
+            f.write(plist)
+        os.system(f"launchctl load {launchd_path}")
 
 def disable_startup():
     if platform.system() == "Windows":
@@ -86,8 +104,10 @@ def disable_startup():
         except WindowsError as e:
             print(f"Error disabling startup: {e}")
     elif platform.system() == "Darwin":
-        defaults = NSUserDefaults.standardUserDefaults()
-        defaults.setBool_forKey_(False, get_startup_key())
+        launchd_path = os.path.expanduser(f"~/Library/LaunchAgents/{get_startup_key()}.plist")
+        os.system(f"launchctl unload {launchd_path}")
+        if os.path.exists(launchd_path):
+            os.remove(launchd_path)
 
 def toggle_startup(icon, item):
     config = load_config()
