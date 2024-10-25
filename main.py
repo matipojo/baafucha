@@ -1,6 +1,5 @@
-import keyboard
 import pyperclip
-from pynput import keyboard as pynput_keyboard
+from pynput import keyboard
 import time
 from PIL import Image
 import threading
@@ -12,7 +11,7 @@ from core.taskbar import on_config_change
 import platform
 
 # Determine the modifier key based on the operating system
-MODIFIER_KEY = pynput_keyboard.Key.ctrl if platform.system() == "Windows" else pynput_keyboard.Key.cmd
+MODIFIER_KEY = keyboard.Key.ctrl if platform.system() == "Windows" else keyboard.Key.cmd
 
 # Keyboard mapping for English to Hebrew and vice versa
 en_to_he = {
@@ -79,18 +78,31 @@ def auto_convert(select_all=False):
 def on_key_press(key):
     """Handle key press events."""
     try:
-        if key == pynput_keyboard.Key.f8:
-            # Check if shift is pressed
-            if keyboard.is_pressed('control'):
+        if key == keyboard.Key.f8:
+            if MODIFIER_KEY in pressed_keys:
                 auto_convert(select_all=True)
             else:
                 auto_convert(select_all=False)
     except AttributeError:
         pass
 
-# Create keyboard listener
-listener = pynput_keyboard.Listener(on_press=on_key_press)
-keyboard_controller = pynput_keyboard.Controller()
+def on_key_release(key):
+    """Handle key release events."""
+    try:
+        if key in pressed_keys:
+            pressed_keys.remove(key)
+    except KeyError:
+        pass
+
+# Create keyboard controller and listener
+keyboard_controller = keyboard.Controller()
+pressed_keys = set()
+
+def on_press(key):
+    pressed_keys.add(key)
+    on_key_press(key)
+
+listener = keyboard.Listener(on_press=on_press, on_release=on_key_release)
 
 def stop_listener():
     """Stop the keyboard listener."""
@@ -104,10 +116,10 @@ if __name__ == "__main__":
 
     print("Baafucha is running.")
     print("Press F8 to convert selected text between English and Hebrew.")
-    print("Press Ctrl+F8 to select all text and convert it.")
+    print(f"Press {MODIFIER_KEY}+F8 to select all text and convert it.")
 
     start_language_monitor()
-    
+
     # Run system tray icon
     tray = SystemTrayApp(stop_listener, config_callback=on_config_change)
     tray.run()
