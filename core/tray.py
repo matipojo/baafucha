@@ -24,7 +24,7 @@ def get_startup_key():
             winreg.KEY_ALL_ACCESS
         )
     elif platform.system() == "Darwin":
-        return NSBundle.mainBundle().bundleIdentifier()
+        return 'com.baafucha.app'
 
 def is_startup_enabled():
     if platform.system() == "Windows":
@@ -95,6 +95,7 @@ def enable_startup():
         with open(launchd_path, 'w') as f:
             f.write(plist)
         os.system(f"launchctl load {launchd_path}")
+        NSUserDefaults.standardUserDefaults().setBool_forKey_(True, get_startup_key())
 
 def disable_startup():
     if platform.system() == "Windows":
@@ -108,6 +109,7 @@ def disable_startup():
         os.system(f"launchctl unload {launchd_path}")
         if os.path.exists(launchd_path):
             os.remove(launchd_path)
+            NSUserDefaults.standardUserDefaults().setBool_forKey_(False, get_startup_key())
 
 def toggle_startup(icon, item):
     config = load_config()
