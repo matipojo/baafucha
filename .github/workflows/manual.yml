@@ -2,9 +2,18 @@ name: Manual
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Choose the platform'
+        required: true
+        default: 'windows'
+        options:
+          - windows
+          - macos
 
 jobs:
   build:
+    if: github.event.inputs.platform == 'windows'
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
@@ -31,6 +40,7 @@ jobs:
         path: dist/Baafucha.exe
 
   build-macos:
+    if: github.event.inputs.platform == 'macos'
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v4
