@@ -36,8 +36,34 @@ jobs:
         name: Baafucha
         path: dist/Baafucha.exe
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --noconsole --name Baafucha --add-data "assets/icon.png:assets" --icon=assets/icon.png main.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Baafucha
+        path: dist/Baafucha
+
   release:
-    needs: build
+    needs: [build, build-macos]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -70,4 +96,20 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./Baafucha.exe
         asset_name: Baafucha.exe
+        asset_content_type: application/octet-stream
+
+    - name: Download MacOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: Baafucha
+        path: dist/Baafucha
+
+    - name: Upload MacOS Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./Baafucha
+        asset_name: Baafucha
         asset_content_type: application/octet-stream

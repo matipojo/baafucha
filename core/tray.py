@@ -1,29 +1,42 @@
 import sys
 import os
-import winreg
+import platform
 import pystray
 from PIL import Image
 import json
+
+if platform.system() == "Windows":
+    import winreg
+elif platform.system() == "Darwin":
+    from AppKit import NSBundle
+    from Foundation import NSUserDefaults
 
 APP_NAME = "Baafucha"
 CONFIG_DIR = os.path.join(os.path.expanduser('~'), '.baafucha')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
 
 def get_startup_key():
-    return winreg.OpenKey(
-        winreg.HKEY_CURRENT_USER,
-        r"Software\Microsoft\Windows\CurrentVersion\Run",
-        0,
-        winreg.KEY_ALL_ACCESS
-    )
+    if platform.system() == "Windows":
+        return winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_ALL_ACCESS
+        )
+    elif platform.system() == "Darwin":
+        return NSBundle.mainBundle().bundleIdentifier()
 
 def is_startup_enabled():
-    try:
-        with get_startup_key() as key:
-            winreg.QueryValueEx(key, APP_NAME)
-        return True
-    except WindowsError:
-        return False
+    if platform.system() == "Windows":
+        try:
+            with get_startup_key() as key:
+                winreg.QueryValueEx(key, APP_NAME)
+            return True
+        except WindowsError:
+            return False
+    elif platform.system() == "Darwin":
+        defaults = NSUserDefaults.standardUserDefaults()
+        return defaults.boolForKey_(get_startup_key())
 
 def load_config():
     if not os.path.exists(CONFIG_DIR):
@@ -54,19 +67,27 @@ def save_config(config):
         json.dump(config, f)
 
 def enable_startup():
-    try:
-        with get_startup_key() as key:
-            app_path = sys.executable
-            winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, app_path)
-    except WindowsError as e:
-        print(f"Error enabling startup: {e}")
+    if platform.system() == "Windows":
+        try:
+            with get_startup_key() as key:
+                app_path = sys.executable
+                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, app_path)
+        except WindowsError as e:
+            print(f"Error enabling startup: {e}")
+    elif platform.system() == "Darwin":
+        defaults = NSUserDefaults.standardUserDefaults()
+        defaults.setBool_forKey_(True, get_startup_key())
 
 def disable_startup():
-    try:
-        with get_startup_key() as key:
-            winreg.DeleteValue(key, APP_NAME)
-    except WindowsError as e:
-        print(f"Error disabling startup: {e}")
+    if platform.system() == "Windows":
+        try:
+            with get_startup_key() as key:
+                winreg.DeleteValue(key, APP_NAME)
+        except WindowsError as e:
+            print(f"Error disabling startup: {e}")
+    elif platform.system() == "Darwin":
+        defaults = NSUserDefaults.standardUserDefaults()
+        defaults.setBool_forKey_(False, get_startup_key())
 
 def toggle_startup(icon, item):
     config = load_config()
@@ -86,7 +107,7 @@ def on_quit(icon, stop_listener_func):
 class SystemTrayApp:
     def __init__(self, stop_listener_func, config_callback):
         self.icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'icon.png')
-        
+
         self.menu = pystray.Menu(
             pystray.MenuItem('Change taskbar color', toggle_taskbar_color_config, checked=lambda _: is_taskbar_color_enabled()),
             pystray.MenuItem('Load on startup', toggle_startup, checked=lambda _: is_startup_enabled()),

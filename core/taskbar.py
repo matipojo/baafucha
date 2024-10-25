@@ -10,24 +10,21 @@ the language changes.
 import ctypes
 import multiprocessing
 import time
-import winreg
 import threading
+import platform
 from core.tray import load_config
 
-# Loading the library user32.dll
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
-
-# Gets the handle of the taskbar
-taskbar_handle = user32.FindWindowW("Shell_TrayWnd", None)
-
-# Setting constants
-WM_SETTINGCHANGE = 0x001A
-
-import winreg
-
-REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-VALUE_NAME = "ColorPrevalence"
+if platform.system() == "Windows":
+    import winreg
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    taskbar_handle = user32.FindWindowW("Shell_TrayWnd", None)
+    WM_SETTINGCHANGE = 0x001A
+    REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+    VALUE_NAME = "ColorPrevalence"
+elif platform.system() == "Darwin":
+    from AppKit import NSApp, NSApplicationActivationPolicyRegular
+    from Foundation import NSUserDefaults
 
 def get_set_color_prevalence(set_value=None):
     """
@@ -35,24 +32,36 @@ def get_set_color_prevalence(set_value=None):
     If set_value is None, it returns the current value.
     If set_value is provided, it sets the new value and returns it.
     """
-
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
-            if set_value is None:
-                value, _ = winreg.QueryValueEx(key, VALUE_NAME)
-                return value
-            else:
-                winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_DWORD, set_value)
-                return set_value
-    except Exception as e:
-        print(f"An error occurred with ColorPrevalence: {e}")
-        return None
+    if platform.system() == "Windows":
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+                if set_value is None:
+                    value, _ = winreg.QueryValueEx(key, VALUE_NAME)
+                    return value
+                else:
+                    winreg.SetValueEx(key, VALUE_NAME, 0, winreg.REG_DWORD, set_value)
+                    return set_value
+        except Exception as e:
+            print(f"An error occurred with ColorPrevalence: {e}")
+            return None
+    elif platform.system() == "Darwin":
+        defaults = NSUserDefaults.standardUserDefaults()
+        if set_value is None:
+            return defaults.integerForKey("AppleInterfaceStyleSwitchesAutomatically")
+        else:
+            defaults.setInteger_forKey_(set_value, "AppleInterfaceStyleSwitchesAutomatically")
+            return set_value
 
 def refresh_taskbar():
     """
     Refreshes the taskbar by sending a settings change notification to the taskbar.
     """
-    user32.SendMessageW(taskbar_handle, WM_SETTINGCHANGE, 0, "ImmersiveColorSet")
+    if platform.system() == "Windows":
+        user32.SendMessageW(taskbar_handle, WM_SETTINGCHANGE, 0, "ImmersiveColorSet")
+    elif platform.system() == "Darwin":
+        app = NSApp()
+        app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+        app.activateIgnoringOtherApps_(True)
 
 def set_color_prevalence(value):
     """
@@ -62,19 +71,15 @@ def set_color_prevalence(value):
     refresh_taskbar()
 
 def get_current_input_language():
-    # Get the foreground window
-    hwnd = user32.GetForegroundWindow()
-
-    # Get the thread of the foreground window
-    thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
-
-    # Get the keyboard layout of the thread
-    layout_id = user32.GetKeyboardLayout(thread_id)
-
-    # Extract the language ID from the keyboard layout
-    language_id = layout_id & 0xFFFF
-
-    return language_id
+    if platform.system() == "Windows":
+        hwnd = user32.GetForegroundWindow()
+        thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
+        layout_id = user32.GetKeyboardLayout(thread_id)
+        language_id = layout_id & 0xFFFF
+        return language_id
+    elif platform.system() == "Darwin":
+        languages = NSUserDefaults.standardUserDefaults().stringForKey_("AppleLanguages")
+        return languages[0] if languages else None
 
 language_monitor_thread = None
 language_monitor_stop_event = None
@@ -108,32 +113,21 @@ def on_config_change(new_config):
         if not language_monitor_thread:
             start_language_monitor()
 
-# The main process of the program
 def monitor_language(stop_event):
-    # Stores the last language ID
     last_layout_id = get_current_input_language()
-
-    # Set the initial color value
     new_value = 0 if last_layout_id == kernel32.GetUserDefaultUILanguage() else 1
-    set_color_prevalence( new_value )
+    set_color_prevalence(new_value)
 
-    # Main loop to check language changes
     while not stop_event.is_set():
         layout_id = get_current_input_language()
-
-        # If a language change is detected, changes the color value and refreshes the taskbar
         if layout_id != last_layout_id:
             last_layout_id = layout_id
-
             if layout_id == kernel32.GetUserDefaultUILanguage():
                 set_color_prevalence(0)
             else:
                 set_color_prevalence(1)
             print("Language change detected to language ID:", layout_id)
-
-        # Waits 0.2 seconds before next test
         time.sleep(0.2)
 
-# Running the main program
 if __name__ == "__main__":
     main()

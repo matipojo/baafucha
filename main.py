@@ -9,6 +9,10 @@ from core.tray import SystemTrayApp
 from core.taskbar import start_language_monitor
 from core.taskbar import stop_language_monitor
 from core.taskbar import on_config_change
+import platform
+
+# Determine the modifier key based on the operating system
+MODIFIER_KEY = pynput_keyboard.Key.ctrl if platform.system() == "Windows" else pynput_keyboard.Key.cmd
 
 # Keyboard mapping for English to Hebrew and vice versa
 en_to_he = {
@@ -33,11 +37,17 @@ def auto_convert(select_all=False):
     original_clipboard = pyperclip.paste()
 
     if select_all:
-        keyboard.press_and_release('ctrl+a')
+        keyboard_controller.press(MODIFIER_KEY)
+        keyboard_controller.press('a')
+        keyboard_controller.release('a')
+        keyboard_controller.release(MODIFIER_KEY)
         time.sleep(0.1)
 
     # Try to copy selected text
-    keyboard.press_and_release('ctrl+c')
+    keyboard_controller.press(MODIFIER_KEY)
+    keyboard_controller.press('c')
+    keyboard_controller.release('c')
+    keyboard_controller.release(MODIFIER_KEY)
     time.sleep(0.1)
     selected_text = pyperclip.paste()
 
@@ -54,10 +64,13 @@ def auto_convert(select_all=False):
         converted_text = convert_text(selected_text, he_to_en)
     else:
         converted_text = convert_text(selected_text, en_to_he)
-    
+
     # Copy converted text to clipboard and paste
     pyperclip.copy(converted_text)
-    keyboard.press_and_release('ctrl+v')
+    keyboard_controller.press(MODIFIER_KEY)
+    keyboard_controller.press('v')
+    keyboard_controller.release('v')
+    keyboard_controller.release(MODIFIER_KEY)
 
     # Restore original clipboard content
     time.sleep(0.1)
@@ -77,6 +90,7 @@ def on_key_press(key):
 
 # Create keyboard listener
 listener = pynput_keyboard.Listener(on_press=on_key_press)
+keyboard_controller = pynput_keyboard.Controller()
 
 def stop_listener():
     """Stop the keyboard listener."""
