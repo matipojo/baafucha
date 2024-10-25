@@ -4,3 +4,7 @@ dist/
 *.spec
 *.pyc
 baafucha_config.json
+
+venv/
+
+.DS_Store

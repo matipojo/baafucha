@@ -78,7 +78,8 @@ def get_current_input_language():
         language_id = layout_id & 0xFFFF
         return language_id
     elif platform.system() == "Darwin":
-        return NSUserDefaults.standardUserDefaults().stringForKey_("AppleLanguages")[0]
+        languages = NSUserDefaults.standardUserDefaults().stringForKey_("AppleLanguages")
+        return languages[0] if languages else None
 
 language_monitor_thread = None
 language_monitor_stop_event = None
