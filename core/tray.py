@@ -4,6 +4,7 @@ import platform
 import pystray
 from PIL import Image
 import json
+import pathlib
 
 if platform.system() == "Windows":
     import winreg
@@ -75,6 +76,12 @@ def enable_startup():
         except WindowsError as e:
             print(f"Error enabling startup: {e}")
     elif platform.system() == "Darwin":
+        # App location thanks to: https://github.com/mrjohannchang/macos-application-location.py
+        p: pathlib.Path = pathlib.Path.cwd() / sys.argv[0]
+
+        if '.app/Contents/MacOS/' in str(p):
+            p = p.parent.parent.parent
+
         plist = f"""
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -84,8 +91,7 @@ def enable_startup():
             <string>{get_startup_key()}</string>
             <key>ProgramArguments</key>
             <array>
-                <string>{sys.executable}</string>
-            </array>
+                <string>{p}</array>
             <key>RunAtLoad</key>
             <true/>
         </dict>
