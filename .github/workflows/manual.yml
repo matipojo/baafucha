@@ -59,10 +59,9 @@ jobs:
     - name: Build with PyInstaller
       run: |
         pyinstaller --onefile --name Baafucha --add-data "assets/icon.png:assets" --icon=assets/icon.png main.py --osx-bundle-identifier com.baafucha.app
-        zip -r dist/Baafucha.app.zip dist/Baafucha.app
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: Baafucha
-        path: dist/Baafucha.app.zip
+        path: dist
